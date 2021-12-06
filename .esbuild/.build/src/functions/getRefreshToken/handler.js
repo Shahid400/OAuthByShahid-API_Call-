@@ -42811,16 +42811,46 @@ var oauthClient = new import_intuit_oauth.default({
   environment: "sandbox",
   redirectUri: "http://localhost:3000/dev/saveData"
 });
+var Dynamo = {
+  async createData(params) {
+    await documentClient.put(params).promise();
+    const msg = "Data added successfully to DB";
+    return msg;
+  },
+  async getData(params) {
+    const data = await documentClient.scan(params).promise();
+    return data;
+  },
+  async updateData(params) {
+    await documentClient.update(params).promise();
+    const msg = "Data updated successfully to DB";
+    return msg;
+  }
+};
 
 // src/functions/getRefreshToken/handler.ts
-var getRefreshToken = async (event) => {
-  const refreshToken = event.body.refresh_token;
-  console.log("=======================================================");
-  console.log("============== In getRefreshToken File");
-  console.log(refreshToken);
-  const response = await oauthClient.refreshUsingToken(refreshToken);
+var getRefreshToken = async () => {
+  const params = {
+    TableName: "ShahidTable"
+  };
+  const data = await Dynamo.getData(params);
+  const realmId = data.Items[0].realmId;
+  const refreshToken = data.Items[0].refreshToken;
+  const authTokenInfo = await oauthClient.refreshUsingToken(refreshToken);
+  const authToken = authTokenInfo.token.access_token;
+  const params1 = {
+    TableName: "ShahidTable",
+    Key: {
+      realmId
+    },
+    UpdateExpression: "set authToken = :aToken",
+    ExpressionAttributeValues: {
+      ":aToken": authToken
+    }
+  };
+  await Dynamo.updateData(params1);
   return formatJSONResponse({
-    message: response
+    message: authToken
   });
 };
 var main = middyfy(getRefreshToken);
